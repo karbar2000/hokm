@@ -1,0 +1,144 @@
+<!DOCTYPE html>
+<html lang="fa" dir="rtl"><head><meta charset="utf-8"><title>حکم آنلاین</title>
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<style>
+:root{box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px);--bg:#f4f1ea;--fg:#1d1d1b;--tb:#2f7d4f;--cd:#fff;--rd:#c62828;--ac:#1a5fb4}
+@media(prefers-color-scheme:dark){:root:not([data-theme=light]){--bg:#17191c;--fg:#eee;--tb:#1f5a38;--cd:#f5f5f2;--rd:#e05050;--ac:#6ea8fe}}
+:root[data-theme=dark]{--bg:#17191c;--fg:#eee;--tb:#1f5a38;--cd:#f5f5f2;--rd:#e05050;--ac:#6ea8fe}
+html{scroll-padding-top:env(safe-area-inset-top,0px)}
+body{margin:0;background:var(--bg);color:var(--fg);font-family:Tahoma,system-ui,sans-serif;max-width:640px;margin:auto;padding:12px}
+button,input{font:inherit;padding:8px 14px;border-radius:8px;border:1px solid #8886;background:var(--cd);color:#111}
+button.p{background:var(--ac);color:#fff;border:0}
+.row{display:flex;gap:8px;flex-wrap:wrap;justify-content:center;margin:8px 0}
+.bar{display:flex;justify-content:space-between;flex-wrap:wrap;gap:6px;font-size:14px}
+#tbl{background:var(--tb);border-radius:16px;padding:10px;margin:10px 0;display:grid;grid-template-columns:1fr 1.4fr 1fr;grid-template-rows:auto 120px auto;gap:4px;color:#fff;text-align:center;font-size:13px}
+.s{padding:4px;border-radius:8px}.s.on{background:#ffd54f55;outline:2px solid #ffd54f}
+#top{grid-column:2}#lf{grid-column:1;grid-row:2;align-self:center}#rt{grid-column:3;grid-row:2;align-self:center}
+#mid{grid-column:2;grid-row:2;display:grid;grid-template-columns:1fr 1fr 1fr;grid-template-rows:1fr 1fr 1fr;direction:ltr}
+#bt{grid-column:2;grid-row:3}
+.c{display:inline-block;min-width:34px;padding:6px 4px;margin:2px;border-radius:6px;background:var(--cd);color:#111;font-weight:700;direction:ltr;border:1px solid #0003;cursor:default}
+.c.r{color:var(--rd)}.c.ok{cursor:pointer;outline:2px solid #ffd54f;transform:translateY(-4px)}.c.no{opacity:.55}
+.m0{grid-area:3/2}.m1{grid-area:2/1}.m2{grid-area:1/2}.m3{grid-area:2/3}
+#msg{text-align:center;font-weight:700;min-height:24px}
+</style></head><body>
+<h2 style="margin:4px 0">♠ حکم آنلاین ♥</h2>
+<div id="app"></div>
+<script>
+const SU={S:'♠',H:'♥',D:'♦',C:'♣'},RK={11:'J',12:'Q',13:'K',14:'A'};
+const cs=c=>c[0],cr=c=>+c.slice(1),lab=c=>SU[cs(c)]+(RK[cr(c)]||cr(c));
+const A=document.getElementById('app');
+let db,me,ref,code,S=null,tm=null;
+
+const cardEl=(c,cls='',id='')=>`<span class="c ${'HD'.includes(cs(c))?'r':''} ${cls}" ${id}>${lab(c)}</span>`;
+const sortH=h=>[...h].sort((a,b)=>'SHDC'.indexOf(cs(a))-'SHDC'.indexOf(cs(b))||cr(b)-cr(a));
+const mySeat=()=>S&&S.seats.indexOf(me);
+const nm=(i,m)=>i===m?'تو':S.seats[i]?`بازیکن ${i+1}`:`ربات ${i+1}`;
+const val=(c,s)=>cs(c)===s.trump?100+cr(c):cs(c)===s.lead?cr(c):0;
+function legal(s,seat){const h=s.hands[seat];if(!s.lead)return h;const f=h.filter(c=>cs(c)===s.lead);return f.length?f:h}
+
+function deal(s){
+  const d=[];for(const x of 'SHDC')for(let r=2;r<=14;r++)d.push(x+r);
+  for(let i=d.length-1;i>0;i--){const j=Math.random()*(i+1)|0;[d[i],d[j]]=[d[j],d[i]]}
+  s.hands=[0,1,2,3].map(i=>d.slice(i*13,i*13+5));
+  s.rest=[0,1,2,3].map(i=>d.slice(i*13+5,i*13+13));
+  s.trump=null;s.trick=[];s.lead=null;s.tricks=[0,0];s.lastTrick=null;s.phase='trump';s.turn=s.hakem;
+}
+function pickTrump(s,t){
+  s.trump=t;for(let i=0;i<4;i++)s.hands[i]=s.hands[i].concat(s.rest[i]);
+  s.rest=[];s.phase='play';s.turn=s.hakem;
+}
+function play(s,seat,c){
+  s.hands[seat]=s.hands[seat].filter(x=>x!==c);
+  if(!s.lead)s.lead=cs(c);
+  s.trick.push({p:seat,c});
+  if(s.trick.length<4){s.turn=(seat+1)%4;return}
+  let w=s.trick[0];for(const t of s.trick)if(val(t.c,s)>val(w.c,s))w=t;
+  s.tricks[w.p%2]++;s.lastTrick={cards:s.trick,w:w.p};s.trick=[];s.lead=null;s.turn=w.p;
+  if(s.hands[0].length===0){
+    const t=s.tricks[0]>=7?0:1;s.score[t]++;
+    if(s.hakem%2!==t)s.hakem=(s.hakem+1)%4;
+    s.phase=s.score[t]>=7?'over':'handover';
+  }
+}
+function botTrump(h){const n={};h.forEach(c=>n[cs(c)]=(n[cs(c)]||0)+1+cr(c)/20);return Object.keys(n).sort((a,b)=>n[b]-n[a])[0]}
+function botPlay(s,seat){
+  const L=legal(s,seat).slice().sort((a,b)=>val(a,s)-val(b,s)||cr(a)-cr(b));
+  if(!s.trick.length){const nt=L.filter(c=>cs(c)!==s.trump);return (nt.length?nt:L).slice(-1)[0]}
+  const best=Math.max(...s.trick.map(t=>val(t.c,s)));
+  return L.find(c=>val(c,s)>best)||L[0];
+}
+
+async function save(fn){ // apply change on a fresh copy and write
+  const s=JSON.parse(JSON.stringify(S));fn(s);s.v=(s.v||0)+1;S=s;render();
+  try{await ref.set(s)}catch(e){msg('خطا در ذخیره: '+(e.message||e.code))}
+}
+function msg(t){const m=document.getElementById('msg');if(m)m.textContent=t}
+
+function drive(){ // host runs the bots
+  clearTimeout(tm);if(!S||S.host!==me)return;
+  const v=S.v;
+  if(S.phase==='trump'&&!S.seats[S.hakem])tm=setTimeout(()=>{if(S.v===v)save(s=>pickTrump(s,botTrump(s.hands[s.hakem])))},900);
+  if(S.phase==='play'&&!S.seats[S.turn])tm=setTimeout(()=>{if(S.v===v)save(s=>play(s,s.turn,botPlay(s,s.turn)))},1000);
+}
+
+function render(){
+  if(!S){return}
+  const m=Math.max(0,mySeat()),seated=mySeat()>=0,host=S.host===me;
+  const pos=[m,(m+1)%4,(m+2)%4,(m+3)%4];
+  let h=`<div class="bar"><span>اتاق: <b>${code}</b></span><span>حکم: <b>${S.trump?SU[S.trump]:'—'}</b></span><span>امتیاز دست: شما ${S.score[m%2]} | حریف ${S.score[1-m%2]}</span><span>بردها: ${S.tricks[m%2]} - ${S.tricks[1-m%2]}</span></div>`;
+  const seat=(i,id)=>`<div id="${id}" class="s ${S.phase==='play'&&S.turn===i||S.phase==='trump'&&S.hakem===i?'on':''}">${nm(i,m)}${S.hakem===i&&S.phase!=='lobby'?' 👑':''}${S.phase!=='lobby'?`<br>${S.hands[i].length+(S.rest[i]?S.rest[i].length:0)} کارت`:''}</div>`;
+  h+=`<div id="tbl">${seat(pos[2],'top')}${seat(pos[1],'lf')}<div id="mid">${S.trick.map(t=>`<div class="m${(t.p-m+4)%4}">${cardEl(t.c)}</div>`).join('')}</div>${seat(pos[3],'rt')}${seat(m,'bt')}</div>`;
+  let st='';
+  if(S.phase==='lobby')st='منتظر بازیکنان… صندلی خالی با ربات پر می‌شود';
+  else if(S.phase==='trump')st=S.hakem===m&&seated?'تو حاکمی؛ حکم را انتخاب کن':`${nm(S.hakem,m)} در حال انتخاب حکم است`;
+  else if(S.phase==='play')st=S.turn===m&&seated?'نوبت توست':`نوبت ${nm(S.turn,m)}`;
+  else if(S.phase==='handover')st='دست تمام شد. '+(S.tricks[m%2]>=7?'تیم شما برد!':'تیم حریف برد.');
+  else st=S.score[m%2]>=7?'🏆 تیم شما برنده بازی شد!':'تیم حریف برنده بازی شد.';
+  h+=`<div id="msg">${st}</div>`;
+  if(S.lastTrick&&S.phase==='play')h+=`<div class="row" style="font-size:12px">دست قبل (برنده: ${nm(S.lastTrick.w,m)}): ${S.lastTrick.cards.map(t=>cardEl(t.c,'no')).join('')}</div>`;
+  if(S.phase==='lobby'){
+    h+='<div class="row">'+[0,1,2,3].map(i=>`<button data-seat="${i}" ${S.seats[i]?'disabled':''}>${S.seats[i]?(S.seats[i]===me?'✔ شما':'پُر')+` (${i+1})`:'نشستن در صندلی '+(i+1)}</button>`).join('')+'</div>';
+    h+=host?'<div class="row"><button class="p" id="go">شروع بازی</button></div>':'<div class="row">میزبان بازی را شروع می‌کند.</div>';
+    h+='<p style="font-size:12px;text-align:center">صندلی‌های ۱ و ۳ هم‌تیمی‌اند، ۲ و ۴ هم‌تیمی. کد اتاق را برای دوستانت بفرست.</p>';
+  }
+  if(S.phase==='trump'&&S.hakem===m&&seated)h+='<div class="row">'+Object.keys(SU).map(k=>`<button class="p" data-trump="${k}">${SU[k]}</button>`).join('')+'</div>';
+  if(S.phase==='handover'&&host)h+='<div class="row"><button class="p" id="next">دست بعد</button></div>';
+  if(S.phase==='over'&&host)h+='<div class="row"><button class="p" id="again">بازی جدید</button></div>';
+  if(seated&&S.phase!=='lobby'){
+    const ok=S.phase==='play'&&S.turn===m?legal(S,m):[];
+    h+='<div class="row" style="direction:ltr">'+sortH(S.hands[m]).map(c=>cardEl(c,ok.includes(c)?'ok':(S.phase==='play'?'no':''),`data-card="${c}"`)).join('')+'</div>';
+  }else if(!seated&&S.phase!=='lobby')h+='<p style="text-align:center">تماشاگر هستی.</p>';
+  A.innerHTML=h;
+  A.querySelectorAll('[data-seat]').forEach(b=>b.onclick=()=>{if(S.seats.includes(me))return;save(s=>{if(!s.seats[b.dataset.seat])s.seats[b.dataset.seat]=me})});
+  A.querySelectorAll('[data-trump]').forEach(b=>b.onclick=()=>save(s=>pickTrump(s,b.dataset.trump)));
+  A.querySelectorAll('.c.ok').forEach(e=>e.onclick=()=>save(s=>play(s,m,e.dataset.card)));
+  const g=id=>document.getElementById(id);
+  if(g('go'))g('go').onclick=()=>save(s=>{if(!s.seats.includes(me)){const f=s.seats.indexOf(null);s.seats[f]=me}s.hakem=Math.random()*4|0;s.score=[0,0];deal(s)});
+  if(g('next'))g('next').onclick=()=>save(s=>deal(s));
+  if(g('again'))g('again').onclick=()=>save(s=>{s.score=[0,0];s.hakem=Math.random()*4|0;deal(s)});
+  drive();
+}
+
+function lobby(err){
+  A.innerHTML=`<div class="row"><input id="rc" placeholder="کد اتاق (مثلاً ali)" maxlength="20"><button class="p" id="j">ورود / ساخت اتاق</button></div>
+  <p style="text-align:center;font-size:13px">یک کد انتخاب کن و همان را به دوستانت بده. تا ۴ نفر؛ جاهای خالی را ربات پر می‌کند.</p><p id="msg" style="color:var(--rd)">${err||''}</p>`;
+  document.getElementById('j').onclick=join;
+}
+async function join(){
+  code=document.getElementById('rc').value.trim().toLowerCase().replace(/[^a-z0-9\u0600-\u06ff_-]/g,'');
+  if(!code)return;
+  ref=db.doc('rooms/'+code);
+  try{
+    const snap=await ref.get();
+    if(!snap.exists)await ref.set({host:me,phase:'lobby',seats:[me,null,null,null],hands:[[],[],[],[]],rest:[[],[],[],[]],trick:[],tricks:[0,0],score:[0,0],hakem:0,v:0,trump:null,lead:null,turn:0,lastTrick:null});
+    ref.onSnapshot(s=>{if(s.exists){const d=s.data();if(!S||d.v>=S.v||d.v===0||true){S=d;render()}}},e=>msg('خطا: '+e.message));
+  }catch(e){lobby('خطا: '+(e.message||e.code)+' — برای نوشتن باید دسترسی Contributor داشته باشی.')}
+}
+(async()=>{
+  try{
+    const u=await claude.use('user'),d=await claude.use('db');
+    if(!u||!d){A.innerHTML='<p>برای بازی آنلاین باید وارد حساب Claude شوی و صفحه با تو به اشتراک گذاشته شده باشد.</p>';return}
+    db=d;me=await u.id();lobby();
+  }catch(e){A.innerHTML='<p>امکان اتصال نیست.</p>'}
+})();
+</script></body></html>
